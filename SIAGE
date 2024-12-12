@@ -1,0 +1,251 @@
+#include <ncurses/ncurses.h>
+#include <iostream>
+#include <ctime>
+#include <iomanip> 
+#include <unistd.h>
+
+using namespace std;
+
+class SlidingPuzzle {
+public:
+    SlidingPuzzle(int levelTime) {
+        int initBoard[3][3] = {
+            {1, 2, 3},
+            {4, 5, 6},
+            {7, 8, 0} 
+        };
+        for (int i = 0; i < 3; ++i) {
+            for (int j = 0; j < 3; ++j) {
+                board[i][j] = initBoard[i][j];
+            }
+        }
+        emptyRow = 2;
+        emptyCol = 2;
+        shuffle();
+        totalTime = levelTime; 
+    }
+
+    void shuffle() {
+        srand(time(0));
+        for (int i = 0; i < 100; i++) {
+            int direction = rand() % 4;
+            switch (direction) {
+                case 0: move(emptyRow - 1, emptyCol); break; 
+                case 1: move(emptyRow + 1, emptyCol); break; 
+                case 2: move(emptyRow, emptyCol - 1); break; 
+                case 3: move(emptyRow, emptyCol + 1); break; 
+            }
+        }
+    }
+
+    void move(int newRow, int newCol) {
+        if (newRow >= 0 && newRow < 3 && newCol >= 0 && newCol < 3) {
+            swap(board[emptyRow][emptyCol], board[newRow][newCol]);
+            emptyRow = newRow;
+            emptyCol = newCol;
+        }
+    }
+
+    bool isSolved() {
+        int count = 1;
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                if (i == 2 && j == 2) {
+                    return board[i][j] == 0; 
+                }
+                if (board[i][j] != count++) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    void printBoard(int timeLeft) {
+        clearScreen();
+
+        
+        int termHeight, termWidth;
+        getmaxyx(stdscr, termHeight, termWidth);
+
+        int startRow = (termHeight - 7) / 2; 
+        int startCol = (termWidth - 13) / 2; 
+       
+        mvprintw(0, (termWidth - 20) / 2, "Waktu tersisa: %d detik", timeLeft);
+
+        
+        mvprintw(startRow, startCol, "+---+---+---+");
+        for (int i = 0; i < 3; i++) {
+            string row = "|";
+            for (int j = 0; j < 3; j++) {
+                if (board[i][j] == 0) {
+                    row += "   |";
+                } else {
+                    row += " " + to_string(board[i][j]) + " |";
+                }
+            }
+            mvprintw(startRow + 1 + i * 2, startCol, "%s", row.c_str());
+            mvprintw(startRow + 2 + i * 2, startCol, "+---+---+---+");
+        }
+        refresh();
+    }
+
+    bool play() {
+        keypad(stdscr, TRUE); 
+
+        time_t startTime = time(0);
+
+        while (!isSolved()) {
+            time_t currentTime = time(0);
+            int timeLeft = totalTime - static_cast<int>(currentTime - startTime);
+
+            if (timeLeft <= 0) {
+                clearScreen();
+                mvprintw(0, 0, "Waktu habis! Anda kalah.");
+                refresh();
+                getch();
+                return false;
+            }
+
+            printBoard(timeLeft);
+            mvprintw(1, 0, "Gunakan tombol panah untuk menggerakkan puzzle.");
+
+            
+            int ch = getch();
+            switch (ch) {
+                case KEY_UP: move(emptyRow - 1, emptyCol); break; 
+                case KEY_DOWN: move(emptyRow + 1, emptyCol); break; 
+                case KEY_LEFT: move(emptyRow, emptyCol - 1); break; 
+                case KEY_RIGHT: move(emptyRow, emptyCol + 1); break; 
+                default: break;
+            }
+            usleep(100000);
+        }
+
+        printBoard(0);
+        mvprintw(0, 0, "Selamat! Anda telah menyelesaikan puzzle!");
+        refresh();
+        getch();
+        return true; 
+    }
+
+private:
+    int board[3][3];
+    int emptyRow, emptyCol;
+    int totalTime;
+
+    
+    void clearScreen() {
+        clear();
+    }
+};
+
+
+int showLevelMenu(int currentLevel) {
+    int choice = currentLevel - 1; 
+    int maxChoice = 10; 
+    int levelUnlocked = currentLevel - 1; 
+
+    while (true) {
+        clear();
+        int termHeight, termWidth;
+        getmaxyx(stdscr, termHeight, termWidth);
+
+        mvprintw(termHeight / 4, (termWidth - 20) / 2, "Pilih Level (1-10):");
+        for (int i = 0; i < maxChoice; i++) {
+            if (i <= levelUnlocked) {
+                if (i == choice) {
+                    attron(A_REVERSE); 
+                    mvprintw(termHeight / 4 + i + 1, (termWidth - 10) / 2, "Level %d", i + 1);
+                    attroff(A_REVERSE);
+                } else {
+                    mvprintw(termHeight / 4 + i + 1, (termWidth - 10) / 2, "Level %d", i + 1);
+                }
+            } else {
+                mvprintw(termHeight / 4 + i + 1, (termWidth - 10) / 2, "Level %d (Kunci)", i + 1);
+            }
+        }
+
+        int ch = getch();
+        switch (ch) {
+            case KEY_UP:
+                if (choice > 0 && choice <= levelUnlocked) choice--;
+                break;
+            case KEY_DOWN:
+                if (choice < levelUnlocked && choice < maxChoice - 1) choice++;
+                break;
+            case 10: 
+                if (choice <= levelUnlocked) {
+                    return choice + 1; 
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
+
+int main() {
+    initscr(); 
+    noecho(); 
+    cbreak(); 
+
+    int currentLevel = 1; 
+
+    
+    while (currentLevel <= 10) {
+        
+        int selectedLevel = showLevelMenu(currentLevel);
+
+        
+        int levelTime = 80 - (selectedLevel - 1) * 5;
+        levelTime = (levelTime < 5) ? 5 : levelTime; 
+
+        SlidingPuzzle puzzle(levelTime);
+        bool levelCompleted = puzzle.play();
+
+        if (levelCompleted) {
+            currentLevel++;
+        } else {
+            clear();
+            mvprintw(0, 0, "Anda kalah! Apakah Anda ingin:");
+            mvprintw(1, 0, "1. Coba lagi");
+            mvprintw(2, 0, "2. Kembali ke menu level");
+            refresh();
+            int ch;
+            while (true) {
+                ch = getch();
+                switch (ch) {
+                    case '1':
+                        puzzle = SlidingPuzzle(levelTime);
+                        levelCompleted = puzzle.play();
+                        if (levelCompleted) {
+                            currentLevel++;
+                        } else {
+                            clear();
+                            mvprintw(0, 0, "Anda kalah! Apakah Anda ingin:");
+                            mvprintw(1, 0, "1. Coba lagi");
+                            mvprintw(2, 0, "2. Kembali ke menu level");
+                            refresh();
+                        }
+                        break;
+                    case '2':
+                        break;
+                    default:
+                        break;
+                }
+                if (ch == '1' || ch == '2') {
+                    break;
+                }
+            }
+        }
+    }
+
+    clear();
+    mvprintw(0, 0, "Selamat! Semua level selesai!");
+    refresh();
+    getch();
+
+    endwin(); 
+    return 0;
+}
