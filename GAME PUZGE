@@ -1,15 +1,119 @@
-#include <ncurses/ncurses.h>
-#include <iostream>
-#include <ctime>
-#include <iomanip> 
+#include <ncurses/curses.h>
 #include <unistd.h>
+#include <fstream>
+#include <string>
+#include <ctime>
+#include <iomanip>
 
 using namespace std;
 
-class PUZGE{
+string currentUser = "";
+
+
+
+bool login() {
+    string username, password, storedUser   , storedPass;
+    bool success = false;
+
+    clear();
+    mvprintw(5, 10, ">>> Login <<<");
+    mvprintw(7, 10, "Username: ");
+    echo();  
+    char uname[50];
+    getstr(uname);
+    username = uname;
+
+    mvprintw(8, 10, "Password: ");
+    echo();  
+    char pass[50];
+    getstr(pass);
+    password = pass;
+
+    ifstream userFile("users.txt");
+    while (userFile >> storedUser    >> storedPass) {
+        if (username == storedUser    && password == storedPass) {
+            success = true;
+            currentUser = username;
+            break;
+        }
+    }
+    userFile.close();
+
+    if (success) {
+        mvprintw(10, 10, "Login Successful!, %s", username.c_str());
+    } else {
+        mvprintw(10, 10, "Login Failed!");
+    }
+    refresh();
+    usleep(2000000);
+    return success;
+}
+
+void registerUser   () {
+    string username, password;
+    clear();
+    mvprintw(5, 10, ">>> Register <<<");
+    mvprintw(7, 10, "Enter username: ");
+    echo();
+    char uname[50];
+    getstr(uname);
+    username = uname;
+
+    mvprintw(8, 10, "Enter password: ");
+    echo();
+    char pass[50];
+    getstr(pass);
+    password = pass;
+
+    ofstream userFile("users.txt", ios::app); 
+    userFile << username << " " << password << endl;
+    userFile.close();
+
+    mvprintw(10, 10, "Registration Successful!");
+    refresh();
+    usleep(2000000);
+}
+
+
+
+void loadingAnimation() {
+    int max_progress = 50;
+    for (int i = 0; i <= max_progress; i++) {
+        clear();
+        move(5, 10);
+
+        start_color();
+        init_pair(1, COLOR_GREEN, COLOR_BLACK);
+        attron(COLOR_PAIR(1));
+        printw("Loading...");
+        attroff(COLOR_PAIR(1));
+
+        move(7, 10);
+        printw("[");
+
+        for (int j = 0; j <= i; j++) {
+            if (j % 2 == 0) {
+                printw("#");
+            } else {
+                printw("=");
+            }
+        }
+
+        for (int j = i + 1; j < max_progress; j++) {
+            printw("-");
+        }
+
+        printw("]");
+        refresh();
+
+        usleep(100000);
+    }
+}
+
+class SlidingPuzzle {
 public:
-    PUZGE(int levelTime) {
-        int initBoard[3][3] = {
+    SlidingPuzzle(int levelTime) {
+                int initBoard[3][3] = {
             {1, 2, 3},
             {4, 5, 6},
             {7, 8, 0} 
@@ -21,11 +125,11 @@ public:
         }
         emptyRow = 2;
         emptyCol = 2;
-        Geser();
+        shuffle();
         totalTime = levelTime; 
     }
 
-    void Geser() {
+    void shuffle() {
         srand(time(0));
         for (int i = 0; i < 100; i++) {
             int direction = rand() % 4;
@@ -64,7 +168,6 @@ public:
     void printBoard(int timeLeft) {
         clearScreen();
 
-        
         int termHeight, termWidth;
         getmaxyx(stdscr, termHeight, termWidth);
 
@@ -73,7 +176,6 @@ public:
        
         mvprintw(0, (termWidth - 20) / 2, "Waktu tersisa: %d detik", timeLeft);
 
-        
         mvprintw(startRow, startCol, "+---+---+---+");
         for (int i = 0; i < 3; i++) {
             string row = "|";
@@ -110,7 +212,6 @@ public:
             printBoard(timeLeft);
             mvprintw(1, 0, "Gunakan tombol panah untuk menggerakkan puzzle.");
 
-            
             int ch = getch();
             switch (ch) {
                 case KEY_UP: move(emptyRow - 1, emptyCol); break; 
@@ -134,14 +235,12 @@ private:
     int emptyRow, emptyCol;
     int totalTime;
 
-    
     void clearScreen() {
         clear();
     }
 };
 
-
-int showLevelMenu(int currentLevel) {
+    int showLevelMenu(int currentLevel) {
     int choice = currentLevel - 1; 
     int maxChoice = 10; 
     int levelUnlocked = currentLevel - 1; 
@@ -190,18 +289,33 @@ int main() {
     noecho(); 
     cbreak(); 
 
+    bool loggedIn = false;
+    while (!loggedIn) {
+        clear();
+        mvprintw(5, 10, "1. Register");
+        mvprintw(6, 10, "2. Login");
+        refresh();
+
+        int choice = getch();
+        if (choice == '1') {
+            registerUser  ();  
+        } else if (choice == '2') {
+            loggedIn = login();
+
+        }
+    }
+
+    loadingAnimation();
+
     int currentLevel = 1; 
 
-    
     while (currentLevel <= 10) {
-        
         int selectedLevel = showLevelMenu(currentLevel);
 
-        
         int levelTime = 80 - (selectedLevel - 1) * 5;
         levelTime = (levelTime < 5) ? 5 : levelTime; 
 
-        PUZGE puzzle(levelTime);
+        SlidingPuzzle puzzle(levelTime);
         bool levelCompleted = puzzle.play();
 
         if (levelCompleted) {
@@ -217,7 +331,7 @@ int main() {
                 ch = getch();
                 switch (ch) {
                     case '1':
-                        puzzle = PUZGE(levelTime);
+                        puzzle = SlidingPuzzle(levelTime);
                         levelCompleted = puzzle.play();
                         if (levelCompleted) {
                             currentLevel++;
